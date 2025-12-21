@@ -10,7 +10,7 @@ router.post("/", upload.single("audio"), async (req, res) => {
   try {
     const audioPath = req.file.path;
 
-    // 1️⃣ Send audio to ElevenLabs for transcription
+    // 1. Send audio to ElevenLabs for transcription
     const formData = new FormData();
     formData.append("file", fs.createReadStream(audioPath));
     formData.append("model_id", "scribe_v1");
@@ -30,7 +30,7 @@ router.post("/", upload.single("audio"), async (req, res) => {
 
     const transcript = transcriptionResult.text || "";
 
-    // 2️⃣ Placeholder feedback (LLM comes next)
+    // 2. Placeholder feedback (LLM comes next)
     const feedback = {
       clarity: "Good structure, but sentences could be tighter.",
       confidence: "Tone sounds confident overall.",
@@ -38,7 +38,7 @@ router.post("/", upload.single("audio"), async (req, res) => {
       suggestion: "Try leading with your strongest example."
     };
 
-    // 3️⃣ Cleanup temp file
+    // 3. Cleanup temp file
     fs.unlinkSync(audioPath);
 
     res.json({
