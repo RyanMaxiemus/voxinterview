@@ -20,15 +20,18 @@ router.post("/", upload.single("audio"), async (req, res) => {
     const transcript = await transcribeAudio(audioPath);
 
     // Analyze the transcript using Gemini
-    const feedback = await analyzeTranscript(transcript);
-
-    // Cleanup
-    fs.unlinkSync(audioPath);
+    const analysis = await analyzeTranscript(transcript);
 
     res.json({
       transcript,
-      feedback,
+      feedback: analysis.feedback,
+      fallback: analysis.fallback,
+      circuit: analysis.circuit || null,
     });
+
+    // Cleanup
+    fs.unlinkSync(audioPath);
+    
   } catch (error) {
     console.error(error);
 

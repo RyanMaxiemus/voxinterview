@@ -4,11 +4,13 @@ export default function Recorder() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
+  const [fallbackMode, setFallbackMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [feedback, setFeedback] = useState(null);
   const [error, setError] = useState("");
+
 
   const startRecording = async () => {
     setError("");
@@ -28,7 +30,7 @@ export default function Recorder() {
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch (err) {
-      setError("Microphone access denied.");
+      setError("Microphone access denied.", err);
     }
   };
 
@@ -56,8 +58,9 @@ export default function Recorder() {
 
         setTranscript(data.transcript);
         setFeedback(data.feedback);
+        setFallbackMode(data.fallback === true);
       } catch (err) {
-        setError("Analysis failed. Try again.");
+        setError("Analysis failed. Try again.", err);
       } finally {
         setLoading(false);
       }
@@ -89,6 +92,11 @@ export default function Recorder() {
 
 {feedback && (
         <>
+          {fallbackMode && (
+            <p style={{ color: "#b45309" }}>
+              ⚠️ Using fallback feedback due to temporary AI unavailability.
+            </p>
+          )}
           <h3>Feedback</h3>
           <ul>
             <li><strong>Clarity:</strong> {feedback.clarity}</li>

@@ -1,5 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { withTimeout } from "./withTimeout.js";
+import {
+  isCircuitOpen,
+  recordFailure,
+  recordSuccess,
+  getCircuitStatus,
+} from "./geminiCircuitBreaker.js";
+import { fallbackFeedback } from "./fallbackFeedback.js";
 
 const TIMEOUT_MS = 8000;
 const MAX_RETRIES = 2;
@@ -9,7 +15,26 @@ const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
 
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Gemini timeout")), ms)
+    ),
+  ]);
+}
+
 export async function analyzeTranscript(transcript) {
+  // 🔒 Circuit breaker check
+  if (isCircuitOpen()) {
+    return {
+      fallback: true,
+      reason: "circuit_open",
+      feedback: fallbackFeedback(transcript),
+      circuit: getCircuitStatus(),
+    };
+  }
+
   let lastError;
 
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
@@ -17,46 +42,41 @@ export async function analyzeTranscript(transcript) {
       const prompt = `
 You are an interview coach evaluating a spoken interview response.
 
-Return STRICT JSON only with the following fields:
+Return STRICT JSON only with:
 - clarity
 - confidence
 - relevance
 - suggestion
 
 Rules:
-- Valid JSON parsable by JSON.parse
+- Valid JSON
 - No markdown
-- No explanations
 - No extra text
-- Short, helpful sentences
+- Short sentences
 
 Answer:
 "${transcript}"
 `;
 
-      const geminiRequest = model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-      });
-
       const result = await withTimeout(
-        geminiRequest,
-        TIMEOUT_MS,
-        "Gemini request timed out"
+        model.generateContent(prompt),
+        TIMEOUT_MS
       );
 
       const rawText = result.response.text();
 
-      let feedback;
-      try {
-        feedback = JSON.parse(rawText);
-      } catch {
-        throw new Error(`Invalid JSON from Gemini: ${rawText}`);
-      }
+      const feedback = JSON.parse(rawText);
 
-      return feedback;
+      recordSuccess();
+
+      return {
+        fallback: false,
+        feedback,
+      };
 
     } catch (err) {
       lastError = err;
+      recordFailure();
 
       console.warn(
         `Gemini attempt ${attempt} failed: ${err.message}`
@@ -68,5 +88,11 @@ Answer:
     }
   }
 
-  throw lastError;
+  // 🔁 Final fallback after retries
+  return {
+    fallback: true,
+    reason: "retries_exhausted",
+    feedback: fallbackFeedback(transcript),
+    circuit: getCircuitStatus(),
+  };
 }
