@@ -2,20 +2,28 @@ import express from "express";
 import multer from "multer";
 import fs from "fs";
 import fetch from "node-fetch";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-router.post("/", upload.single("audio"), async (req, res) => {
-  try {
-    const audioPath = req.file.path;
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
+});
 
-    // 1. Send audio to ElevenLabs for transcription
+router.post("/", upload.single("audio"), async (req, res) => {
+  let audioPath;
+
+  try {
+    audioPath = req.file.path;
+
+    // 1. Speech To Text (ElevenLabs)
     const formData = new FormData();
     formData.append("file", fs.createReadStream(audioPath));
     formData.append("model_id", "scribe_v1");
 
-    const elevenResponse = await fetch(
+    const elevenRes = await fetch(
       "https://api.elevenlabs.io/v1/speech-to-text",
       {
         method: "POST",
@@ -26,29 +34,60 @@ router.post("/", upload.single("audio"), async (req, res) => {
       }
     );
 
-    const transcriptionResult = await elevenResponse.json();
+    const elevenData = await elevenRes.json();
+    const transcript = elevenData.text || "";
 
-    const transcript = transcriptionResult.text || "";
+    if (!transcript) {
+      throw new Error("Empty transcript");
+    }
 
-    // 2. Placeholder feedback (LLM comes next)
-    const feedback = {
-      clarity: "Good structure, but sentences could be tighter.",
-      confidence: "Tone sounds confident overall.",
-      relevance: "Answer stays mostly on topic.",
-      suggestion: "Try leading with your strongest example."
-    };
+    // 2. Gemini feedback prompt
+    const prompt = `
+You are an interview coach evaluating a spoken interview response.
 
-    // 3. Cleanup temp file
+Return STRICT JSON only with the following fields:
+- clarity
+- confidence
+- relevance
+- suggestion
+
+Rules:
+- No markdown
+- No explanations
+- No extra text
+- Short, helpful sentences
+
+Answer:
+"${transcript}"
+`;
+
+    const result = await model.generateContent(prompt);
+    const rawText = result.response.text();
+
+    let feedback;
+    try {
+      feedback = JSON.parse(rawText);
+    } catch {
+      throw new Error("Gemini returned invalid JSON");
+    }
+
+    // 3. Cleanup
     fs.unlinkSync(audioPath);
 
     res.json({
       transcript,
-      feedback
+      feedback,
     });
-
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Analysis failed" });
+
+    if (audioPath && fs.existsSync(audioPath)) {
+      fs.unlinkSync(audioPath);
+    }
+
+    res.status(500).json({
+      error: "Analysis failed",
+    });
   }
 });
 
