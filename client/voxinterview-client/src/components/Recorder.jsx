@@ -40,7 +40,7 @@ export default function Recorder() {
 
     mediaRecorderRef.current.onstop = async () => {
       const audioBlob = new Blob(audioChunksRef.current, {
-        type: "audio/webm",
+        type: "audio/wav",
       });
 
       const formData = new FormData();
