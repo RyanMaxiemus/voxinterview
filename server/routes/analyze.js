@@ -1,8 +1,11 @@
 import express from "express";
 import multer from "multer";
 import fs from "fs";
+
 import { transcribeAudio } from "../utils/elevenlabsTranscribe.js";
-import { analyzeTranscript } from "../utils/geminiAnalyze.js";
+import { analyzeTranscriptWithGemini } from "../utils/geminiAnalyze.js";
+import { analyzeConfidence } from "../utils/confidenceHeuristics.js";
+import { fallbackFeedback } from "../utils/fallbackFeedback.js";
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
@@ -12,36 +15,41 @@ router.post("/", upload.single("audio"), async (req, res) => {
 
   try {
     audioPath = req.file.path;
-    
-    // Debugging
-    console.log("Uploaded file:", req.file);
 
-    // Transcribe the audio using ElevenLabs
+    // 1. Speech To Text
     const transcript = await transcribeAudio(audioPath);
 
-    // Analyze the transcript using Gemini
-    const analysis = await analyzeTranscript(transcript);
+    // 2. Confidence heuristics (always available)
+    const confidenceAnalysis = analyzeConfidence(transcript);
+
+    let feedback;
+    let fallbackMode = false;
+
+    // 3. Gemini analysis (may fail)
+    try {
+      feedback = await analyzeTranscriptWithGemini(transcript);
+    } catch (err) {
+      console.warn("Using fallback feedback:", err.message);
+      fallbackMode = true;
+      feedback = fallbackFeedback(confidenceAnalysis);
+    }
 
     res.json({
       transcript,
-      feedback: analysis.feedback,
-      fallback: analysis.fallback,
-      circuit: analysis.circuit || null,
+      feedback,
+      confidence: confidenceAnalysis,
+      meta: {
+        fallbackMode
+      }
     });
 
-    // Cleanup
-    fs.unlinkSync(audioPath);
-    
-  } catch (error) {
-    console.error(error);
-
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Analysis failed" });
+  } finally {
     if (audioPath && fs.existsSync(audioPath)) {
       fs.unlinkSync(audioPath);
     }
-
-    res.status(500).json({
-      error: "Analysis failed",
-    });
   }
 });
 

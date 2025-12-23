@@ -94,7 +94,7 @@ export default function Recorder() {
         <>
           {fallbackMode && (
             <p style={{ color: "#b45309" }}>
-              ⚠️ Using fallback feedback due to temporary AI unavailability.
+              ⚠️ Advanced AI feedback temporarily unavailable. Confidence analysis is based on speech heuristics.
             </p>
           )}
           <h3>Feedback</h3>

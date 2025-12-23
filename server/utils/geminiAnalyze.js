@@ -1,38 +1,30 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import {
-  isCircuitOpen,
-  recordFailure,
-  recordSuccess,
-  getCircuitStatus,
-} from "./geminiCircuitBreaker.js";
-import { fallbackFeedback } from "./fallbackFeedback.js";
 
-const TIMEOUT_MS = 8000;
 const MAX_RETRIES = 2;
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_RESET_MS = 60_000;
+
+let failureCount = 0;
+let circuitOpenedAt = null;
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
 
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Gemini timeout")), ms)
-    ),
-  ]);
+function isCircuitOpen() {
+  if (!circuitOpenedAt) return false;
+  if (Date.now() - circuitOpenedAt > CIRCUIT_RESET_MS) {
+    failureCount = 0;
+    circuitOpenedAt = null;
+    return false;
+  }
+  return true;
 }
 
-export async function analyzeTranscript(transcript) {
-  // 🔒 Circuit breaker check
+export async function analyzeTranscriptWithGemini(transcript) {
   if (isCircuitOpen()) {
-    return {
-      fallback: true,
-      reason: "circuit_open",
-      feedback: fallbackFeedback(transcript),
-      circuit: getCircuitStatus(),
-    };
+    throw new Error("Gemini circuit breaker open");
   }
 
   let lastError;
@@ -49,50 +41,37 @@ Return STRICT JSON only with:
 - suggestion
 
 Rules:
-- Valid JSON
+- Valid JSON only
 - No markdown
 - No extra text
-- Short sentences
 
 Answer:
 "${transcript}"
 `;
 
-      const result = await withTimeout(
-        model.generateContent(prompt),
-        TIMEOUT_MS
-      );
+      const result = await model.generateContent(prompt);
+      const raw = result.response.text();
 
-      const rawText = result.response.text();
+      const parsed = JSON.parse(raw);
 
-      const feedback = JSON.parse(rawText);
-
-      recordSuccess();
-
-      return {
-        fallback: false,
-        feedback,
-      };
+      failureCount = 0;
+      return parsed;
 
     } catch (err) {
       lastError = err;
-      recordFailure();
+      failureCount++;
 
-      console.warn(
-        `Gemini attempt ${attempt} failed: ${err.message}`
-      );
+      console.warn(`Gemini attempt ${attempt} failed: ${err.message}`);
 
-      if (attempt <= MAX_RETRIES) {
-        await new Promise(res => setTimeout(res, 400 * attempt));
+      if (failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
+        circuitOpenedAt = Date.now();
+        console.error("🚨 Gemini circuit breaker OPEN");
+        break;
       }
+
+      await new Promise(r => setTimeout(r, 400 * attempt));
     }
   }
 
-  // 🔁 Final fallback after retries
-  return {
-    fallback: true,
-    reason: "retries_exhausted",
-    feedback: fallbackFeedback(transcript),
-    circuit: getCircuitStatus(),
-  };
+  throw lastError;
 }

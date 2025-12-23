@@ -1,19 +1,23 @@
-export function fallbackFeedback(transcript) {
-  const wordCount = transcript.split(/\s+/).length;
+/**
+ * Returned when Gemini is unavailable or circuit breaker is open.
+ * This keeps UX intact during failures or demos.
+ */
 
+export function fallbackFeedback(confidenceAnalysis) {
+  feedback = {
+    suggestion: "Focus on clear structure and concrete examples.",
+    confidence: confidenceAnalysis.rationale,
+    confidenceScore: confidenceAnalysis.score,
+  };
   return {
-    clarity:
-      wordCount < 30
-        ? "Your answer is very brief. Consider expanding with a concrete example."
-        : "Your answer is understandable, but could benefit from tighter structure.",
-
-    confidence:
-      "Your tone sounds steady, but varying your pace and emphasis can improve confidence.",
-
-    relevance:
-      "The answer appears generally relevant, though tying it more directly to the role would help.",
-
-    suggestion:
-      "Try using a clear opening sentence followed by one specific example to strengthen your response.",
+    clarity: "Automated analysis unavailable.",
+    relevance: "Automated analysis unavailable.",
+    suggestion: "Try opening with a clear summary of your role or impact before adding details.",
+    confidence: confidenceAnalysis.score,
+    confidenceScore: confidenceAnalysis.score,
+    meta: {
+      fallback: true,
+      reason: "AI analysis temporarily unavailable"
+    }
   };
 }
