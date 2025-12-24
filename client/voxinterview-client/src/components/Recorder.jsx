@@ -83,14 +83,14 @@ export default function Recorder() {
 
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-{transcript && (
-  <>
-    <h3>Transcript</h3>
-    <p>{transcript}</p>
-  </>
-)}
+      {transcript && (
+        <>
+          <h3>Transcript</h3>
+          <p>{transcript}</p>
+        </>
+      )}
 
-{feedback && (
+      {feedback && (
         <>
           {fallbackMode && (
             <p style={{ color: "#b45309" }}>

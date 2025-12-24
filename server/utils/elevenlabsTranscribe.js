@@ -2,9 +2,16 @@ import fs from "fs";
 import fetch from "node-fetch";
 import FormData from "form-data";
 
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_URL = "https://api.elevenlabs.io/v1/speech-to-text";
 const TIMEOUT_MS = 10000;
 const MAX_RETRIES = 2;
+
+if (!ELEVENLABS_API_KEY) {
+  throw new Error(
+    "ELEVENLABS_API_KEY is not set. Please configure it in your .env file."
+  );
+}
 
 export async function transcribeAudio(filePath) {
   let lastError;
@@ -28,7 +35,7 @@ export async function transcribeAudio(filePath) {
       const response = await fetch(ELEVENLABS_URL, {
         method: "POST",
         headers: {
-          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "xi-api-key": ELEVENLABS_API_KEY,
           ...formData.getHeaders(),
         },
         body: formData,

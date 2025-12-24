@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MAX_RETRIES = 2;
 const CIRCUIT_BREAKER_THRESHOLD = 3;
 const CIRCUIT_RESET_MS = 60_000;
@@ -7,13 +8,13 @@ const CIRCUIT_RESET_MS = 60_000;
 let failureCount = 0;
 let circuitOpenedAt = null;
 
-if (!process.env.GEMINI_API_KEY) {
+if (!GEMINI_API_KEY) {
   throw new Error(
     "GEMINI_API_KEY is not set. Please configure it in your .env file."
   );
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
