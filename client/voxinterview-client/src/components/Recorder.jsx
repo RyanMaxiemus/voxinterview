@@ -58,7 +58,7 @@ export default function Recorder() {
 
         setTranscript(data.transcript);
         setFeedback(data.feedback);
-        setFallbackMode(data.fallback === true);
+        setFallbackMode(data.meta?.fallbackMode === true);
       } catch (err) {
         setError("Analysis failed. Try again.", err);
       } finally {
