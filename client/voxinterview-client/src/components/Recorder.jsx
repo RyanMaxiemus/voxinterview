@@ -9,13 +9,14 @@ export default function Recorder() {
   const [loading, setLoading] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [feedback, setFeedback] = useState(null);
+  const [confidence, setConfidence] = useState(null);
   const [error, setError] = useState("");
-
 
   const startRecording = async () => {
     setError("");
     setTranscript("");
     setFeedback(null);
+    setConfidence(null);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -58,6 +59,7 @@ export default function Recorder() {
 
         setTranscript(data.transcript);
         setFeedback(data.feedback);
+        setConfidence(data.confidence);
         setFallbackMode(data.meta?.fallbackMode === true);
       } catch (err) {
         setError("Analysis failed. Try again.", err);
@@ -68,7 +70,46 @@ export default function Recorder() {
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto" }}>
+    <>
+      {confidence && (
+        <>
+          <h3>Confidence Score</h3>
+
+          <div style={{
+            background: "#eee",
+            borderRadius: 8,
+            overflow: "hidden",
+            height: 18,
+            marginBottom: 8
+          }}>
+            <div
+              style={{
+                width: `${confidence.score}%`,
+                height: "100%",
+                background:
+                  confidence.score > 75
+                    ? "#4caf50"
+                    : confidence.score > 50
+                    ? "#ff9800"
+                    : "#f44336",
+                transition: "width 0.4s ease",
+              }}
+            />
+          </div>
+
+          <strong>{confidence.score}/100</strong>
+
+          {confidence.notes?.length > 0 && (
+            <ul>
+              {confidence.notes.map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      <div style={{ maxWidth: 600, margin: "0 auto" }}>
       <h2>🎙 Practice Interview</h2>
 
       {!isRecording && !loading && (
@@ -99,13 +140,16 @@ export default function Recorder() {
           )}
           <h3>Feedback</h3>
           <ul>
+            <li><strong>STAR Score:</strong> {feedback.starScore?.toFixed(2)}/4</li>
             <li><strong>Clarity:</strong> {feedback.clarity}</li>
             <li><strong>Confidence:</strong> {feedback.confidence}</li>
             <li><strong>Relevance:</strong> {feedback.relevance}</li>
             <li><strong>Suggestion:</strong> {feedback.suggestion}</li>
           </ul>
+          <ConfidenceBar score={confidence.score} />
         </>
       )}
     </div>
-  );
+  </>
+);
 }

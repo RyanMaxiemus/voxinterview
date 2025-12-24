@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 
-// Load environment variables BEFORE importing modules that depend on them
+// Load environment variables
 dotenv.config();
 
 import express from "express";

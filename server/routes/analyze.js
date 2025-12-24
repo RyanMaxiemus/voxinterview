@@ -31,8 +31,13 @@ router.post("/", upload.single("audio"), async (req, res) => {
     } catch (err) {
       console.warn("Using fallback feedback:", err.message);
       fallbackMode = true;
-      feedback = fallbackFeedback(confidenceAnalysis);
+      feedback = fallbackFeedback(transcript, confidenceAnalysis.score);
     }
+
+    // 4. Calculate STAR score
+    const starScore = 
+      (feedback.situation + feedback.task + feedback.action + feedback.result) / 4;
+    feedback.starScore = starScore;
 
     res.json({
       transcript,

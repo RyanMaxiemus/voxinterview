@@ -1,6 +1,10 @@
 import fs from "fs";
 import fetch from "node-fetch";
 import FormData from "form-data";
+import dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config();
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_URL = "https://api.elevenlabs.io/v1/speech-to-text";
