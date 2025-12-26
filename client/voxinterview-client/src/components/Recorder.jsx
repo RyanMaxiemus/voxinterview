@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import ConfidenceBar from "./confidenceBar";
 
 export default function Recorder() {
   const mediaRecorderRef = useRef(null);
@@ -11,6 +12,7 @@ export default function Recorder() {
   const [feedback, setFeedback] = useState(null);
   const [confidence, setConfidence] = useState(null);
   const [error, setError] = useState("");
+  const [role, setRole] = useState("frontend");
 
   const startRecording = async () => {
     setError("");
@@ -48,6 +50,7 @@ export default function Recorder() {
 
       const formData = new FormData();
       formData.append("audio", audioBlob);
+      formData.append("role", role);
 
       try {
         const res = await fetch("http://localhost:5000/analyze", {
@@ -71,85 +74,87 @@ export default function Recorder() {
 
   return (
     <>
-      {confidence && (
-        <>
-          <h3>Confidence Score</h3>
-
-          <div style={{
-            background: "#eee",
-            borderRadius: 8,
-            overflow: "hidden",
-            height: 18,
-            marginBottom: 8
-          }}>
-            <div
-              style={{
-                width: `${confidence.score}%`,
-                height: "100%",
-                background:
-                  confidence.score > 75
-                    ? "#4caf50"
-                    : confidence.score > 50
-                    ? "#ff9800"
-                    : "#f44336",
-                transition: "width 0.4s ease",
-              }}
-            />
-          </div>
-
-          <strong>{confidence.score}/100</strong>
-
-          {confidence.notes?.length > 0 && (
-            <ul>
-              {confidence.notes.map((note, i) => (
-                <li key={i}>{note}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-
       <div style={{ maxWidth: 600, margin: "0 auto" }}>
-      <h2>🎙 Practice Interview</h2>
+        <select value={role} onChange={e => setRole(e.target.value)}>
+          <option value="general">General</option>
+          <option value="frontend">Frontend</option>
+          <option value="backend">Backend</option>
+          <option value="security">Security</option>
+        </select>
+        <h2>🎙 Practice Interview</h2>
 
-      {!isRecording && !loading && (
-        <button onClick={startRecording}>Start Recording</button>
-      )}
+        {!isRecording && !loading && (
+          <button onClick={startRecording}>Start Recording</button>
+        )}
 
-      {isRecording && (
-        <button onClick={stopRecording}>Stop Recording</button>
-      )}
+        {isRecording && (
+          <button onClick={stopRecording}>Stop Recording</button>
+        )}
 
-      {loading && <p>Analyzing your answer…</p>}
+        {loading && <p>Analyzing your answer…</p>}
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {transcript && (
-        <>
-          <h3>Transcript</h3>
-          <p>{transcript}</p>
-        </>
-      )}
+        {transcript && (
+          <>
+            <h3>Transcript</h3>
+            <p>{transcript}</p>
+          </>
+        )}
 
-      {feedback && (
-        <>
-          {fallbackMode && (
+        {confidence && (
+          <>
+            <h3><strong>Confidence Score</strong></h3>
+            <div style={{
+              background: "#eee",
+              borderRadius: 8,
+              overflow: "hidden",
+              height: 18,
+              marginBottom: 8
+            }}>
+              <div
+                style={{
+                  width: `${confidence.score * 10}%`,
+                  height: "100%",
+                  background:
+                      confidence.score > 7
+                      ? "#4caf50"
+                      : confidence.score > 5
+                      ? "#ff9800"
+                      : "#f44336",
+                  transition: "width 0.4s ease",
+                }}
+              />
+            </div>
+            <strong>{confidence.score}/10</strong>
+            {confidence.notes?.length > 0 && (
+              <ul>
+                {confidence.notes.map((note, i) => (
+                  <li key={i}>{note}</li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+
+        {feedback && (
+          <>
+            {fallbackMode && (
             <p style={{ color: "#b45309" }}>
               ⚠️ Advanced AI feedback temporarily unavailable. Confidence analysis is based on speech heuristics.
             </p>
-          )}
-          <h3>Feedback</h3>
-          <ul>
-            <li><strong>STAR Score:</strong> {feedback.starScore?.toFixed(2)}/4</li>
-            <li><strong>Clarity:</strong> {feedback.clarity}</li>
-            <li><strong>Confidence:</strong> {feedback.confidence}</li>
-            <li><strong>Relevance:</strong> {feedback.relevance}</li>
-            <li><strong>Suggestion:</strong> {feedback.suggestion}</li>
-          </ul>
-          <ConfidenceBar score={confidence.score} />
-        </>
-      )}
-    </div>
-  </>
-);
+            )}
+            <h3>Feedback</h3>
+            <ul>
+              <li><strong>STAR Score:</strong> {feedback.starScore?.toFixed(2)}/4</li>
+              <li><strong>Clarity:</strong> {feedback.clarity}</li>
+              <li><strong>Confidence:</strong> {feedback.confidence}</li>
+              <li><strong>Relevance:</strong> {feedback.relevance}</li>
+              <li><strong>Suggestion:</strong> {feedback.suggestion}</li>
+            </ul>
+          </>
+        )}
+      </div>
+    </>
+  );
 }

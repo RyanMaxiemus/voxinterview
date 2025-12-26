@@ -3,7 +3,7 @@ import multer from "multer";
 import fs from "fs";
 
 import { transcribeAudio } from "../utils/elevenlabsTranscribe.js";
-import { analyzeTranscriptWithGemini } from "../utils/geminiAnalyze.js";
+import { analyzeTranscript } from "../utils/geminiAnalyze.js";
 import { analyzeConfidence } from "../utils/confidenceHeuristics.js";
 import { fallbackFeedback } from "../utils/fallbackFeedback.js";
 
@@ -25,9 +25,11 @@ router.post("/", upload.single("audio"), async (req, res) => {
     let feedback;
     let fallbackMode = false;
 
+    const role = req.body?.role || "frontend";
+
     // 3. Gemini analysis (may fail)
     try {
-      feedback = await analyzeTranscriptWithGemini(transcript);
+      feedback = await analyzeTranscript(transcript, role);
     } catch (err) {
       console.warn("Using fallback feedback:", err.message);
       fallbackMode = true;

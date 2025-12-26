@@ -1,4 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ROLE_PROFILES } from "./roleProfiles.js";
+import { scoreConfidence } from "./scoreConfidence.js";
+import { fallbackFeedback } from "./fallbackFeedback.js";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
@@ -29,9 +32,11 @@ export function isGeminiAvailable() {
   return false;
 }
 
-export async function analyzeTranscriptWithGemini(transcript) {
+export async function analyzeTranscript(transcript, role = "frontend") {
+  const profile = ROLE_PROFILES[role] || ROLE_PROFILES.frontend;
+
   if (!isGeminiAvailable()) {
-    throw new Error("Gemini circuit breaker open");
+    return fallbackFeedback(transcript, profile);
   }
 
   let lastError;
@@ -39,18 +44,32 @@ export async function analyzeTranscriptWithGemini(transcript) {
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
     try {
       const prompt = `
-You are an interview coach.
+You are an expert interviewer evaluating a ${profile.title} candidate.
 
-Return STRICT JSON with:
-- clarity
-- confidence
-- relevance
-- suggestion
-- star (object with situation, task, action, result scores 1–5)
+Focus areas:
+${profile.focus.map(f => `- ${f}`).join("\n")}
 
-No markdown. No extra text.
+Evaluate the spoken response below.
 
-Answer:
+Return STRICT JSON with the following fields:
+{
+  "clarity": string,
+  "confidence": string,
+  "relevance": string,
+  "suggestion": string,
+  "situation": number (1-4),
+  "task": number (1-4),
+  "action": number (1-4),
+  "result": number (1-4)
+}
+
+Rules:
+- No markdown
+- No explanations
+- No extra keys
+- Values must be concise and role-specific
+
+Candidate response:
 "${transcript}"
 `;
 
@@ -62,12 +81,21 @@ Answer:
       const raw = result.response.text();
       const parsed = JSON.parse(raw);
 
+      // Optional: sanity clamp
+      ["situation", "task", "action", "result"].forEach(k => {
+        if (typeof parsed[k] !== "number" || parsed[k] < 1 || parsed[k] > 4) {
+          parsed[k] = 2;
+        }
+      });
+
+      parsed.confidenceScore = scoreConfidence(transcript);
+
       consecutiveFailures = 0;
       return parsed;
 
     } catch (err) {
       lastError = err;
-      console.warn(`Gemini attempt ${attempt} failed: ${err.message}`);
+      console.warn(`Gemini attempt failed: ${err.message}`);
 
       if (attempt <= MAX_RETRIES) {
         await new Promise(r => setTimeout(r, 400 * attempt));
@@ -75,102 +103,12 @@ Answer:
     }
   }
 
+  // Circuit breaker opens
   consecutiveFailures++;
-
   if (consecutiveFailures >= FAILURE_THRESHOLD) {
     circuitOpenUntil = Date.now() + 60_000;
-    console.warn("🚨 Gemini circuit breaker OPEN for 60s");
+    console.warn("🚨 Gemini circuit breaker OPEN (60s)");
   }
 
-  throw lastError;
+  return fallbackFeedback(transcript, ROLE_PROFILES[role]);
 }
-
-
-// import { GoogleGenerativeAI } from "@google/generative-ai";
-// import dotenv from "dotenv";
-
-// // Load environment variables
-// dotenv.config();
-
-// const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-// const MAX_RETRIES = 2;
-// const CIRCUIT_BREAKER_THRESHOLD = 3;
-// const CIRCUIT_RESET_MS = 60_000;
-
-// let failureCount = 0;
-// let circuitOpenedAt = null;
-
-// if (!GEMINI_API_KEY) {
-//   throw new Error(
-//     "GEMINI_API_KEY is not set. Please configure it in your .env file."
-//   );
-// }
-
-// const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-// const model = genAI.getGenerativeModel({
-//   model: "gemini-2.5-flash",
-// });
-
-// function isCircuitOpen() {
-//   if (!circuitOpenedAt) return false;
-//   if (Date.now() - circuitOpenedAt > CIRCUIT_RESET_MS) {
-//     failureCount = 0;
-//     circuitOpenedAt = null;
-//     return false;
-//   }
-//   return true;
-// }
-
-// export async function analyzeTranscriptWithGemini(transcript) {
-//   if (isCircuitOpen()) {
-//     throw new Error("Gemini circuit breaker open");
-//   }
-
-//   let lastError;
-
-//   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-//     try {
-//       const prompt = `
-// You are an interview coach evaluating a spoken interview response.
-
-// Return STRICT JSON only with:
-// - clarity
-// - confidence
-// - relevance
-// - suggestion
-
-// Rules:
-// - Valid JSON only
-// - No markdown
-// - No extra text
-
-// Answer:
-// "${transcript}"
-// `;
-
-//       const result = await model.generateContent(prompt);
-//       const raw = result.response.text();
-
-//       const parsed = JSON.parse(raw);
-
-//       failureCount = 0;
-//       return parsed;
-
-//     } catch (err) {
-//       lastError = err;
-//       failureCount++;
-
-//       console.warn(`Gemini attempt ${attempt} failed: ${err.message}`);
-
-//       if (failureCount >= CIRCUIT_BREAKER_THRESHOLD) {
-//         circuitOpenedAt = Date.now();
-//         console.error("🚨 Gemini circuit breaker OPEN");
-//         break;
-//       }
-
-//       await new Promise(r => setTimeout(r, 400 * attempt));
-//     }
-//   }
-
-//   throw lastError;
-// }

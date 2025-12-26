@@ -3,28 +3,17 @@
  * This keeps UX intact during failures or demos.
  */
 
-export function fallbackFeedback(transcript, confidenceScore) {
+export function fallbackFeedback() {
   return {
-    mode: "fallback",
-    clarity: "Your answer was understandable, but could benefit from clearer structure.",
-    confidence: `Delivery showed moderate confidence (score: ${confidenceScore}/10).`,
-    relevance: "The response stayed mostly on topic.",
-    suggestion: "Try using a brief opening summary followed by a concrete example.",
-    situation: 3,
-    task: 3,
-    action: 3,
-    result: 3
+    clarity: "Your response was understandable, but could benefit from clearer structure.",
+    confidence: "Your tone was steady, but stronger delivery would improve impact.",
+    relevance: "You addressed the question, though more direct examples could help.",
+    suggestion: "Try structuring your answer using a clear beginning, middle, and end.",
+    scores: {
+      clarity: 6,
+      confidence: 6,
+      relevance: 6,
+      technicalDepth: 6,
+    },
   };
 }
-
-
-// export function fallbackFeedback(confidenceAnalysis) {
-//   return {
-//     clarity: "Automated analysis unavailable.",
-//     relevance: "Automated analysis unavailable.",
-//     suggestion: "Try opening with a clear summary of your role or impact before adding details.",
-//     confidence: confidenceAnalysis.rationale,
-//     confidenceScore: confidenceAnalysis.score,
-//     fallback: true,
-//   };
-// }
