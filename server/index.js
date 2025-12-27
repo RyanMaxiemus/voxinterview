@@ -15,6 +15,7 @@ app.use(express.json());
 
 app.use("/analyze", analyzeRoute);
 app.use("/interview", interviewRoutes);
+app.use("/uploads", express.static("uploads"));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
