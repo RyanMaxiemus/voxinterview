@@ -13,12 +13,28 @@ export default function Recorder() {
   const [confidence, setConfidence] = useState(null);
   const [error, setError] = useState("");
   const [role, setRole] = useState("frontend");
+  const [question, setQuestion] = useState("");
+  // const [questionAudio, setQuestionAudio] = useState(null);
+
+
+  const fetchQuestion = async () => {
+    const res = await fetch("http://localhost:5000/interview/question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role })
+    });
+
+    const data = await res.json();
+    setQuestion(data.question);
+  };
 
   const startRecording = async () => {
     setError("");
     setTranscript("");
     setFeedback(null);
     setConfidence(null);
+
+    await fetchQuestion();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -76,12 +92,17 @@ export default function Recorder() {
     <>
       <div style={{ maxWidth: 600, margin: "0 auto" }}>
         <select value={role} onChange={e => setRole(e.target.value)}>
-          <option value="general">General</option>
           <option value="frontend">Frontend</option>
           <option value="backend">Backend</option>
           <option value="security">Security</option>
         </select>
         <h2>🎙 Practice Interview</h2>
+        {question && (
+          <div style={{ marginBottom: 16 }}>
+            <h3>Interview Question</h3>
+            <p><strong>{question}</strong></p>
+          </div>
+        )}
 
         {!isRecording && !loading && (
           <button onClick={startRecording}>Start Recording</button>

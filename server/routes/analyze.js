@@ -2,9 +2,9 @@ import express from "express";
 import multer from "multer";
 import fs from "fs";
 
-import { transcribeAudio } from "../utils/elevenlabsTranscribe.js";
-import { analyzeTranscript } from "../utils/geminiAnalyze.js";
-import { analyzeConfidence } from "../utils/confidenceHeuristics.js";
+import { transcribeAudio } from "../services/elevenlabsTranscribe.js";
+import { analyzeTranscript } from "../services/geminiAnalyze.js";
+import { analyzeConfidence } from "../services/scoring/scoreConfidence.js";
 import { fallbackFeedback } from "../utils/fallbackFeedback.js";
 
 const router = express.Router();

@@ -6,12 +6,14 @@ dotenv.config();
 import express from "express";
 import cors from "cors";
 import analyzeRoute from "./routes/analyze.js";
+import interviewRoutes from "./routes/interview.js";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+app.use("/interview", interviewRoutes);
 app.use("/analyze", analyzeRoute);
 
 const PORT = process.env.PORT || 5000;
