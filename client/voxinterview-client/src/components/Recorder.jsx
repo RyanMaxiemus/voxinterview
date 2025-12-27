@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import ConfidenceBar from "./confidenceBar";
 
 export default function Recorder() {
@@ -8,6 +8,8 @@ export default function Recorder() {
   const [fallbackMode, setFallbackMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [questionLoading, setQuestionLoading] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [feedback, setFeedback] = useState(null);
   const [confidence, setConfidence] = useState(null);
@@ -16,17 +18,29 @@ export default function Recorder() {
   const [question, setQuestion] = useState("");
   // const [questionAudio, setQuestionAudio] = useState(null);
 
+  const fetchQuestion = useCallback(async () => {
+    try {
+      setQuestionLoading(true);
+      const res = await fetch("http://localhost:5000/interview/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role })
+      });
 
-  const fetchQuestion = async () => {
-    const res = await fetch("http://localhost:5000/interview/question", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role })
-    });
+      const data = await res.json();
+      setQuestion(data.question);
+    } catch (err) {
+      setError("Failed to load question. Please try again.");
+      console.error("Question fetch error:", err);
+    } finally {
+      setQuestionLoading(false);
+    }
+  }, [role]);
 
-    const data = await res.json();
-    setQuestion(data.question);
-  };
+  useEffect(() => {
+    fetchQuestion();
+  }, [role, fetchQuestion]);
+
 
   const startRecording = async () => {
     setError("");
@@ -52,6 +66,43 @@ export default function Recorder() {
       setError("Microphone access denied.", err);
     }
   };
+
+  const speakQuestion = async () => {
+    if (!question) {
+      setError("Question not loaded yet. Please wait.");
+      return;
+    }
+
+    if (isSpeaking) {
+      return;
+    }
+
+    try {
+      setError("");
+      setIsSpeaking(true);
+      const res = await fetch("http://localhost:5000/interview/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: question })
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to generate speech");
+      }
+
+      const audioBlob = await res.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+      audio.play();
+    } catch (err) {
+      setError("Could not read question. Please try again.");
+      console.error("Speech error:", err);
+      setIsSpeaking(false);
+    }
+  };
+
 
   const stopRecording = async () => {
     setIsRecording(false);
@@ -97,10 +148,18 @@ export default function Recorder() {
           <option value="security">Security</option>
         </select>
         <h2>🎙 Practice Interview</h2>
+        {questionLoading && (
+          <div style={{ marginBottom: 16 }}>
+            <p>Loading question...</p>
+          </div>
+        )}
         {question && (
           <div style={{ marginBottom: 16 }}>
             <h3>Interview Question</h3>
             <p><strong>{question}</strong></p>
+            <button onClick={speakQuestion} disabled={questionLoading || isSpeaking}>
+              {isSpeaking ? "🔊 Reading..." : "🔊 Read Question"}
+            </button>
           </div>
         )}
 

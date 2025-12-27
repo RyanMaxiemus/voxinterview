@@ -13,8 +13,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use("/interview", interviewRoutes);
 app.use("/analyze", analyzeRoute);
+app.use("/interview", interviewRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

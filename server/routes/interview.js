@@ -2,6 +2,7 @@ import express from "express";
 import { ROLE_PROFILES } from "../services/roleProfiles.js";
 import { analyzeTranscript } from "../services/geminiAnalyze.js";
 import { transcribeAudio } from "../services/elevenlabsTranscribe.js";
+import { speakQuestion } from "../utils/speakQuestion.js";
 
 const router = express.Router();
 
@@ -9,19 +10,20 @@ const router = express.Router();
  * POST /interview/ask
  * Returns a question based on role
  */
-router.post("/ask", (req, res) => {
+router.post("/ask", async (req, res) => {
   const { role = "frontend" } = req.body;
 
   const profile = ROLE_PROFILES[role] || ROLE_PROFILES.frontend;
 
   const question =
-    profile.questions?.[Math.floor(Math.random() * profile.questions.length)];
-
-  console.log("Selected question for role", role, ":", question);
+    profile.questions?.[
+      Math.floor(Math.random() * profile.questions.length)
+    ];
 
   res.json({
     role,
-    question,
+    question: question.text,
+    id: question.id
   });
 });
 
@@ -58,6 +60,28 @@ router.post("/question", async (req, res) => {
   res.json({
     question,
   });
+});
+
+/**
+ * POST /interview/speak
+ * Converts question text to speech using ElevenLabs
+ */
+router.post("/speak", async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ error: "Text is required" });
+    }
+
+    const audioBuffer = await speakQuestion(text);
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.send(audioBuffer);
+  } catch (err) {
+    console.error("Speak question error:", err);
+    res.status(500).json({ error: "Failed to generate speech" });
+  }
 });
 
 export default router;
