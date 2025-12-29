@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import ConfidenceBar from "./confidenceBar";
-import { QUESTIONS } from "../questions";
+import { ROLE_PROFILES } from "../roleProfiles";
 
 export default function Recorder() {
   const mediaRecorderRef = useRef(null);
@@ -142,7 +142,7 @@ export default function Recorder() {
       </select>
 
       <p>
-        Question {questionIndex + 1} of {QUESTIONS[role].length}
+        Question {questionIndex + 1} of {ROLE_PROFILES[role].questions.length}
       </p>
 
       {!isAsking && !question && (
@@ -198,13 +198,13 @@ export default function Recorder() {
             <li><strong>Suggestion:</strong> {feedback.suggestion}</li>
           </ul>
 
-          {questionIndex < QUESTIONS[role].length - 1 && (
+          {questionIndex < ROLE_PROFILES[role].questions.length - 1 && (
             <button onClick={goToNextQuestion}>
               Next Question →
             </button>
           )}
 
-          {questionIndex === QUESTIONS[role].length - 1 && (
+          {questionIndex === ROLE_PROFILES[role].questions.length - 1 && (
             <p>🎉 Interview complete. Nice work!</p>
           )}
         </>

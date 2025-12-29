@@ -1,65 +1,54 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { ROLE_PROFILES } from "./roleProfiles.js";
-import { scoreConfidence } from "./scoring/scoreConfidence.js";
-import { fallbackFeedback } from "../utils/fallbackFeedback.js";
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { fallbackFeedback } from '../utils/fallbackFeedback.js';
+import {
+  isGeminiAvailable,
+  recordFailure,
+  recordSuccess
+} from '../utils/geminiCircuitBreaker.js';
+import { withTimeout } from '../utils/withTimeout.js';
+import { ROLE_PROFILES } from './roleProfiles.js';
+import { scoreConfidence } from './scoring/scoreConfidence.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+// Debug API key on module load
+console.log('🔍 Gemini API Key Debug:');
+console.log('  - Key exists:', !!process.env.GEMINI_API_KEY);
+console.log('  - Key length:', process.env.GEMINI_API_KEY?.length || 0);
+console.log(
+  '  - Key starts with AIza:',
+  process.env.GEMINI_API_KEY?.startsWith('AIza') || false
+);
+console.log(
+  '  - Key preview:',
+  process.env.GEMINI_API_KEY?.substring(0, 10) + '...' || 'undefined'
+);
 
 const TIMEOUT_MS = 8000;
 const MAX_RETRIES = 2;
-const FAILURE_THRESHOLD = 3;
-
-let consecutiveFailures = 0;
-let circuitOpenUntil = null;
-
-/**
- * Timeout helper
- */
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Gemini timeout")), ms)
-    ),
-  ]);
-}
-
-export function isGeminiAvailable() {
-  if (!circuitOpenUntil) return true;
-
-  if (Date.now() > circuitOpenUntil) {
-    circuitOpenUntil = null;
-    consecutiveFailures = 0;
-    return true;
-  }
-
-  return false;
-}
 
 /**
  * Main interview analysis + progression handler
  */
 export async function analyzeTranscript(
   transcript,
-  role = "frontend",
+  role = 'frontend',
   questionIndex = 0
 ) {
   const profile = ROLE_PROFILES[role] || ROLE_PROFILES.frontend;
   const questions = profile.questions || [];
 
-  const currentQuestion = questions[questionIndex] || "";
+  const currentQuestion = questions[questionIndex] || '';
   const nextQuestion =
-    questionIndex + 1 < questions.length
-      ? questions[questionIndex + 1]
-      : null;
+    questionIndex + 1 < questions.length ? questions[questionIndex + 1] : null;
 
   if (!isGeminiAvailable()) {
     return {
       ...fallbackFeedback(transcript, profile),
       nextQuestion,
       nextQuestionIndex: questionIndex + 1,
-      completed: !nextQuestion,
+      completed: !nextQuestion
     };
   }
 
@@ -99,14 +88,15 @@ Rules:
 
       const result = await withTimeout(
         model.generateContent(prompt),
-        TIMEOUT_MS
+        TIMEOUT_MS,
+        'Gemini timeout'
       );
 
       const parsed = JSON.parse(result.response.text());
 
       // Safety clamp
-      ["situation", "task", "action", "result"].forEach((k) => {
-        if (typeof parsed[k] !== "number" || parsed[k] < 1 || parsed[k] > 4) {
+      ['situation', 'task', 'action', 'result'].forEach(k => {
+        if (typeof parsed[k] !== 'number' || parsed[k] < 1 || parsed[k] > 4) {
           parsed[k] = 2;
         }
       });
@@ -116,29 +106,25 @@ Rules:
       parsed.nextQuestionIndex = questionIndex + 1;
       parsed.completed = !nextQuestion;
 
-      consecutiveFailures = 0;
+      recordSuccess();
       return parsed;
     } catch (err) {
       lastError = err;
       console.warn(`Gemini attempt failed: ${err.message}`);
 
       if (attempt <= MAX_RETRIES) {
-        await new Promise((r) => setTimeout(r, 400 * attempt));
+        await new Promise(r => setTimeout(r, 400 * attempt));
       }
     }
   }
 
-  // Circuit breaker
-  consecutiveFailures++;
-  if (consecutiveFailures >= FAILURE_THRESHOLD) {
-    circuitOpenUntil = Date.now() + 60_000;
-    console.warn("🚨 Gemini circuit breaker OPEN (60s)");
-  }
+  // Record failure for circuit breaker
+  recordFailure();
 
   return {
     ...fallbackFeedback(transcript, profile),
     nextQuestion,
     nextQuestionIndex: questionIndex + 1,
-    completed: !nextQuestion,
+    completed: !nextQuestion
   };
 }

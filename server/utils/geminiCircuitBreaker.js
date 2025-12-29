@@ -4,17 +4,17 @@ const COOLDOWN_MS = 60_000;
 let failureCount = 0;
 let circuitOpenUntil = null;
 
-export function isCircuitOpen() {
-  if (!circuitOpenUntil) return false;
+export function isGeminiAvailable() {
+  if (!circuitOpenUntil) return true;
 
   if (Date.now() > circuitOpenUntil) {
     // Reset after cooldown
     failureCount = 0;
     circuitOpenUntil = null;
-    return false;
+    return true;
   }
 
-  return true;
+  return false;
 }
 
 export function recordSuccess() {
