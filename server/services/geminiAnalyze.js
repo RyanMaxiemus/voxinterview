@@ -14,7 +14,7 @@ let consecutiveFailures = 0;
 let circuitOpenUntil = null;
 
 /**
- * Simple timeout wrapper
+ * Timeout helper
  */
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -38,20 +38,29 @@ export function isGeminiAvailable() {
 }
 
 /**
- * Main analysis function
- * @param {string} transcript - User's spoken answer
- * @param {string} role - e.g. "frontend", "backend", "security"
- * @param {string} question - The interview question being answered
+ * Main interview analysis + progression handler
  */
 export async function analyzeTranscript(
   transcript,
   role = "frontend",
-  question = ""
+  questionIndex = 0
 ) {
   const profile = ROLE_PROFILES[role] || ROLE_PROFILES.frontend;
+  const questions = profile.questions || [];
+
+  const currentQuestion = questions[questionIndex] || "";
+  const nextQuestion =
+    questionIndex + 1 < questions.length
+      ? questions[questionIndex + 1]
+      : null;
 
   if (!isGeminiAvailable()) {
-    return fallbackFeedback(transcript, profile);
+    return {
+      ...fallbackFeedback(transcript, profile),
+      nextQuestion,
+      nextQuestionIndex: questionIndex + 1,
+      completed: !nextQuestion,
+    };
   }
 
   let lastError;
@@ -59,35 +68,33 @@ export async function analyzeTranscript(
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
     try {
       const prompt = `
-You are an expert technical interviewer evaluating a candidate for a ${profile.title} role.
+You are an expert technical interviewer evaluating a ${profile.title} candidate.
 
 Interview question:
-"${question || "No question provided"}"
+"${currentQuestion}"
 
 Candidate response:
 "${transcript}"
 
-Evaluate the response using the STAR framework and role expectations.
+Evaluate the response using the STAR framework.
 
-Return STRICT JSON ONLY with the following shape:
+Return STRICT JSON ONLY:
 
 {
   "clarity": string,
   "confidence": string,
   "relevance": string,
   "suggestion": string,
-  "situation": number (1-4),
-  "task": number (1-4),
-  "action": number (1-4),
-  "result": number (1-4)
+  "situation": number,
+  "task": number,
+  "action": number,
+  "result": number
 }
 
 Rules:
-- Be concise
 - No markdown
 - No explanations
-- No extra fields
-- Ratings must be integers 1–4
+- Ratings must be integers from 1 to 4
 `;
 
       const result = await withTimeout(
@@ -95,22 +102,19 @@ Rules:
         TIMEOUT_MS
       );
 
-      const raw = result.response.text();
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(result.response.text());
 
       // Safety clamp
-      ["situation", "task", "action", "result"].forEach((key) => {
-        if (
-          typeof parsed[key] !== "number" ||
-          parsed[key] < 1 ||
-          parsed[key] > 4
-        ) {
-          parsed[key] = 2;
+      ["situation", "task", "action", "result"].forEach((k) => {
+        if (typeof parsed[k] !== "number" || parsed[k] < 1 || parsed[k] > 4) {
+          parsed[k] = 2;
         }
       });
 
-      // Add derived confidence score
       parsed.confidenceScore = scoreConfidence(transcript);
+      parsed.nextQuestion = nextQuestion;
+      parsed.nextQuestionIndex = questionIndex + 1;
+      parsed.completed = !nextQuestion;
 
       consecutiveFailures = 0;
       return parsed;
@@ -131,5 +135,10 @@ Rules:
     console.warn("🚨 Gemini circuit breaker OPEN (60s)");
   }
 
-  return fallbackFeedback(transcript, ROLE_PROFILES[role]);
+  return {
+    ...fallbackFeedback(transcript, profile),
+    nextQuestion,
+    nextQuestionIndex: questionIndex + 1,
+    completed: !nextQuestion,
+  };
 }
