@@ -1,11 +1,23 @@
 import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+// Force reload environment variables
+dotenv.config({ override: true });
 
 // Validate environment variables
 import { validateEnvironment } from './utils/validateEnv.js';
 validateEnvironment();
+
+// Additional debug for API key loading
+console.log('🔄 Environment Debug:');
+console.log('  - Current working directory:', process.cwd());
+console.log(
+  '  - Gemini key from env:',
+  process.env.GEMINI_API_KEY?.substring(0, 15) + '...'
+);
+console.log(
+  '  - ElevenLabs key from env:',
+  process.env.ELEVENLABS_API_KEY?.substring(0, 15) + '...'
+);
 
 import cors from 'cors';
 import express from 'express';
@@ -20,13 +32,14 @@ const app = express();
 app.use(
   helmet({
     crossOriginEmbedderPolicy: false, // Allow audio/media handling
+    crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow cross-origin resources
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
-        mediaSrc: ["'self'", 'blob:'],
+        mediaSrc: ["'self'", 'blob:', 'http://localhost:5000'],
         connectSrc: [
           "'self'",
           'http://localhost:5000',
@@ -87,7 +100,13 @@ app.use(
         res.status(403).end();
         return;
       }
+
+      // Set proper headers for audio files
       res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
   })
 );

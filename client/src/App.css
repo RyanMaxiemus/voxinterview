@@ -1,8 +1,49 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-container {
+  max-width: 800px;
+  width: 100%;
   padding: 2rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.recorder-container {
+  max-width: 650px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.recorder-container h2,
+.recorder-container h3 {
+  margin: 1rem 0 0.5rem 0;
+}
+
+.recorder-container p {
+  margin: 0.5rem 0;
+  text-align: center;
+}
+
+.recorder-container ul {
+  text-align: left;
+  max-width: 500px;
+}
+
+.recorder-container select,
+.recorder-container button {
+  margin: 0.5rem;
 }
 
 .logo {

@@ -1,19 +1,19 @@
-import fs from "fs";
-import fetch from "node-fetch";
-import FormData from "form-data";
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
+import FormData from 'form-data';
+import fs from 'fs';
+import fetch from 'node-fetch';
 
 // Load environment variables
 dotenv.config();
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_URL = "https://api.elevenlabs.io/v1/speech-to-text";
-const TIMEOUT_MS = 10000;
+const ELEVENLABS_URL = 'https://api.elevenlabs.io/v1/speech-to-text';
+const TIMEOUT_MS = 30000; // Increased from 10s to 30s
 const MAX_RETRIES = 2;
 
 if (!ELEVENLABS_API_KEY) {
   throw new Error(
-    "ELEVENLABS_API_KEY is not set. Please configure it in your .env file."
+    'ELEVENLABS_API_KEY is not set. Please configure it in your .env file.'
   );
 }
 
@@ -26,56 +26,44 @@ export async function transcribeAudio(filePath) {
 
     try {
       const formData = new FormData();
-      formData.append(
-        "file",
-        fs.createReadStream(filePath),
-        {
-          filename: "audio.wav",
-          contentType: "audio/wav",
-        }
-      );
-      formData.append("model_id", "scribe_v1");
+      formData.append('file', fs.createReadStream(filePath), {
+        filename: 'audio.wav',
+        contentType: 'audio/wav'
+      });
+      formData.append('model_id', 'scribe_v1');
 
       const response = await fetch(ELEVENLABS_URL, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "xi-api-key": ELEVENLABS_API_KEY,
-          ...formData.getHeaders(),
+          'xi-api-key': ELEVENLABS_API_KEY,
+          ...formData.getHeaders()
         },
         body: formData,
-        signal: controller.signal,
+        signal: controller.signal
       });
 
       clearTimeout(timeout);
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(
-          `ElevenLabs HTTP ${response.status}: ${errorText}`
-        );
+        throw new Error(`ElevenLabs HTTP ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
 
       const transcript =
-        data.text ||
-        data.transcript ||
-        data?.segments?.map(s => s.text).join(" ") ||
-        "";
+        data.text || data.transcript || data?.segments?.map(s => s.text).join(' ') || '';
 
       if (!transcript) {
-        throw new Error("Empty transcript from ElevenLabs");
+        throw new Error('Empty transcript from ElevenLabs');
       }
 
       return transcript;
-
     } catch (err) {
       clearTimeout(timeout);
       lastError = err;
 
-      console.warn(
-        `ElevenLabs attempt ${attempt} failed: ${err.message}`
-      );
+      console.warn(`ElevenLabs attempt ${attempt} failed: ${err.message}`);
 
       // Retry only if not the last attempt
       if (attempt <= MAX_RETRIES) {

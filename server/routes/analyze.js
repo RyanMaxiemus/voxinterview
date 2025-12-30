@@ -119,12 +119,13 @@ router.post('/', upload.single('audio'), validateAnalyzeRequest, async (req, res
     let fallbackMode = false;
 
     const role = req.body?.role || 'frontend';
+    const questionIndex = parseInt(req.body?.questionIndex) || 0;
 
     // 3. Gemini analysis (may fail)
     try {
-      feedback = await analyzeTranscript(transcript, role);
+      feedback = await analyzeTranscript(transcript, role, questionIndex);
     } catch (err) {
-      console.warn('Using fallback feedback:', err.message);
+      console.warn('Gemini analysis failed, using fallback:', err.message);
       fallbackMode = true;
       feedback = fallbackFeedback(transcript, confidenceAnalysis.score);
     }

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
 import fs from 'fs';
@@ -7,6 +8,83 @@ import { analyzeTranscript } from '../services/geminiAnalyze.js';
 import { ROLE_PROFILES } from '../services/roleProfiles.js';
 
 const router = express.Router();
+
+// Cache for generated audio files
+const audioCache = new Map();
+
+// Generate a consistent filename based on question content
+const generateAudioFilename = (questionText, questionId) => {
+  const hash = crypto.createHash('md5').update(questionText).digest('hex');
+  return `question-${questionId || hash}.mp3`;
+};
+
+// Check if audio file exists
+const audioFileExists = filename => {
+  const filepath = path.join('uploads', filename);
+  return fs.existsSync(filepath);
+};
+
+// Generate TTS audio for a question (only if not cached)
+const generateQuestionAudio = async (questionText, questionId) => {
+  const filename = generateAudioFilename(questionText, questionId);
+  const filepath = path.join('uploads', filename);
+
+  // Return existing file if it exists
+  if (audioFileExists(filename)) {
+    console.log(`📁 Using cached audio: ${filename}`);
+    return `http://localhost:5000/uploads/${filename}`;
+  }
+
+  // Check if ElevenLabs is configured
+  if (
+    !process.env.ELEVENLABS_API_KEY ||
+    process.env.ELEVENLABS_API_KEY === 'your_new_elevenlabs_api_key_here'
+  ) {
+    console.log('⚠️ ElevenLabs API key not configured, skipping TTS');
+    return null;
+  }
+
+  try {
+    console.log(`🎤 Generating new audio for: ${questionText.substring(0, 50)}...`);
+
+    const ttsResponse = await fetch(
+      'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
+      {
+        method: 'POST',
+        headers: {
+          'xi-api-key': process.env.ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: questionText,
+          voice_settings: {
+            stability: 0.6,
+            similarity_boost: 0.7
+          }
+        })
+      }
+    );
+
+    if (!ttsResponse.ok) {
+      throw new Error(`TTS API error: ${ttsResponse.status}`);
+    }
+
+    const audioBuffer = await ttsResponse.arrayBuffer();
+
+    // Ensure uploads directory exists
+    if (!fs.existsSync('uploads')) {
+      fs.mkdirSync('uploads', { recursive: true });
+    }
+
+    fs.writeFileSync(filepath, Buffer.from(audioBuffer));
+    console.log(`✅ Audio cached: ${filename}`);
+
+    return `http://localhost:5000/uploads/${filename}`;
+  } catch (err) {
+    console.error('TTS generation failed:', err.message);
+    return null;
+  }
+};
 
 // Validation middleware
 const validateRole = [
@@ -20,23 +98,9 @@ const validateRole = [
     .withMessage('Invalid role')
 ];
 
-// Cleanup function for TTS files
-const cleanupTTSFile = filePath => {
-  if (filePath && fs.existsSync(filePath)) {
-    // Cleanup after 5 minutes
-    setTimeout(() => {
-      try {
-        fs.unlinkSync(filePath);
-      } catch (err) {
-        console.error('Failed to cleanup TTS file:', err);
-      }
-    }, 5 * 60 * 1000);
-  }
-};
-
 /**
  * POST /interview/ask
- * Returns a question based on role
+ * Returns a question based on role and question index
  */
 router.post('/ask', validateRole, async (req, res) => {
   try {
@@ -49,71 +113,26 @@ router.post('/ask', validateRole, async (req, res) => {
       });
     }
 
-    const { role = 'frontend' } = req.body;
+    const { role = 'frontend', questionIndex = 0 } = req.body;
     const profile = ROLE_PROFILES[role] || ROLE_PROFILES.frontend;
 
-    // Pick a random question
-    const question =
-      profile.questions[Math.floor(Math.random() * profile.questions.length)];
-
-    // Optional: generate TTS audio
-    let audioUrl = null;
-
-    try {
-      if (
-        !process.env.ELEVENLABS_API_KEY ||
-        process.env.ELEVENLABS_API_KEY === 'your_new_elevenlabs_api_key_here'
-      ) {
-        throw new Error('ElevenLabs API key not configured');
-      }
-
-      const ttsResponse = await fetch(
-        'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
-        {
-          method: 'POST',
-          headers: {
-            'xi-api-key': process.env.ELEVENLABS_API_KEY,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            text: question.text || question,
-            voice_settings: {
-              stability: 0.6,
-              similarity_boost: 0.7
-            }
-          })
-        }
-      );
-
-      if (!ttsResponse.ok) {
-        throw new Error(`TTS API error: ${ttsResponse.status}`);
-      }
-
-      const audioBuffer = await ttsResponse.arrayBuffer();
-      const filename = `question-${Date.now()}-${Math.random()
-        .toString(36)
-        .substr(2, 9)}.mp3`;
-      const filepath = path.join('uploads', filename);
-
-      // Ensure uploads directory exists
-      if (!fs.existsSync('uploads')) {
-        fs.mkdirSync('uploads', { recursive: true });
-      }
-
-      fs.writeFileSync(filepath, Buffer.from(audioBuffer));
-      audioUrl = `/uploads/${filename}`;
-
-      // Schedule cleanup
-      cleanupTTSFile(filepath);
-    } catch (err) {
-      console.warn('TTS failed, falling back to text-only:', err.message);
+    // Get the specific question by index
+    const questionObj = profile.questions[questionIndex];
+    if (!questionObj) {
+      return res.status(400).json({ error: 'Question index out of range' });
     }
 
+    const questionText = questionObj.text || questionObj;
+
+    // Generate or retrieve cached audio
+    const audioUrl = await generateQuestionAudio(questionText, questionObj.id);
+
     res.json({
-      question: question.text || question,
+      question: questionText,
       audioUrl,
       role,
-      questionId: question.id || null
+      questionIndex,
+      questionId: questionObj.id || null
     });
   } catch (err) {
     console.error('Ask question error:', err);
