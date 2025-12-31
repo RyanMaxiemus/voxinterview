@@ -1,3 +1,10 @@
+/**
+ * Displays a visual confidence score bar with color-coded feedback.
+ * Handles different score formats (1-4 STAR scale, 1-10 scale, 0-100 percentage).
+ *
+ * @param {number} score - Confidence score in various formats
+ * @returns {JSX.Element} Rendered confidence bar component
+ */
 export default function ConfidenceBar({ score }) {
   // Normalize score to 0–10 scale
   let normalizedScore = 0;
@@ -15,12 +22,18 @@ export default function ConfidenceBar({ score }) {
     }
   }
 
+  /**
+   * Returns descriptive label based on score
+   */
   const getLabel = () => {
     if (normalizedScore >= 7) return 'High Confidence';
     if (normalizedScore >= 4) return 'Moderate Confidence';
     return 'Low Confidence';
   };
 
+  /**
+   * Returns color based on confidence level
+   */
   const getColor = () => {
     if (normalizedScore >= 7) return '#4caf50'; // green
     if (normalizedScore >= 4) return '#ffc107'; // yellow
@@ -31,12 +44,13 @@ export default function ConfidenceBar({ score }) {
   const progressPercentage = (normalizedScore / 10) * 100;
 
   return (
-    <div style={{ marginTop: 12 }}>
+    <div style={{ marginTop: 12, width: '80%'}}>
+      {/* Confidence label */}
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        {/* <strong>Confidence</strong> */}
-        <span>{getLabel()}</span>
+        <span style={{ margin: '0 auto' }}>{getLabel()}</span>
       </div>
 
+      {/* Progress bar */}
       <div
         style={{
           height: 10,
@@ -56,6 +70,7 @@ export default function ConfidenceBar({ score }) {
         />
       </div>
 
+      {/* Score display */}
       <small style={{ opacity: 0.7 }}>Score: {normalizedScore}/10</small>
     </div>
   );

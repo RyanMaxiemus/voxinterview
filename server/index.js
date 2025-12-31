@@ -7,26 +7,18 @@ dotenv.config({ override: true });
 import { validateEnvironment } from './utils/validateEnv.js';
 validateEnvironment();
 
-// Additional debug for API key loading
-console.log('🔄 Environment Debug:');
-console.log('  - Current working directory:', process.cwd());
-console.log(
-  '  - Gemini key from env:',
-  process.env.GEMINI_API_KEY?.substring(0, 15) + '...'
-);
-console.log(
-  '  - ElevenLabs key from env:',
-  process.env.ELEVENLABS_API_KEY?.substring(0, 15) + '...'
-);
-
 import cors from 'cors';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import analyzeRoute from './routes/analyze.js';
 import interviewRoutes from './routes/interview.js';
+import path from 'path';
 
 const app = express();
+
+// Trust proxy is required for cPanel/Nginx/Passenger to correctly identify protocol (http vs https)
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(
@@ -39,10 +31,11 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'blob:'],
-        mediaSrc: ["'self'", 'blob:', 'http://localhost:5000'],
+        mediaSrc: ["'self'", 'blob:', 'http://localhost:5000', 'https://RyanMaxie.tech'],
         connectSrc: [
           "'self'",
           'http://localhost:5000',
+          'https://RyanMaxie.tech',
           'https://api.elevenlabs.io',
           'https://generativelanguage.googleapis.com'
         ]
@@ -73,7 +66,7 @@ app.use(
   cors({
     origin:
       process.env.NODE_ENV === 'production'
-        ? ['https://yourdomain.com'] // Replace with your production domain
+        ? ['https://RyanMaxie.tech', 'https://www.RyanMaxie.tech'] // Replace with your production domain
         : ['http://localhost:3000', 'http://localhost:5173'], // Common dev ports
     credentials: true,
     optionsSuccessStatus: 200
@@ -85,31 +78,40 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Apply upload rate limiting to analyze route
-app.use('/analyze', uploadLimiter);
-app.use('/analyze', analyzeRoute);
-app.use('/interview', interviewRoutes);
+const apiRouter = express.Router();
+apiRouter.use('/analyze', uploadLimiter);
+apiRouter.use('/analyze', analyzeRoute);
+apiRouter.use('/interview', interviewRoutes);
+
+app.use('/', apiRouter);
+app.use('/vox-api', apiRouter);
+
+const mimeTypes = {
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.ogg': 'audio/ogg',
+    '.m4a': 'audio/x-m4a',
+}
 
 // Secure static file serving
-app.use(
-  '/uploads',
-  express.static('uploads', {
-    maxAge: '1h',
-    setHeaders: (res, path) => {
-      // Only allow audio files to be served
-      if (!path.match(/\.(mp3|wav|ogg|m4a)$/i)) {
-        res.status(403).end();
-        return;
-      }
-
-      // Set proper headers for audio files
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
-      res.setHeader('Access-Control-Allow-Methods', 'GET');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+const staticFileMiddleware = express.static('uploads', {
+  maxAge: '1h',
+  setHeaders: (res, filePath) => {
+    const ext = path.extname(filePath);
+    // Only allow audio files to be served
+    if (!mimeTypes[ext]) {
+      res.status(403).end();
+      return;
     }
-  })
-);
+
+    // Set proper headers for audio files
+    res.setHeader('Content-Type', mimeTypes[ext]);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  }
+});
+
+app.use('/uploads', staticFileMiddleware);
+app.use('/vox-api/uploads', staticFileMiddleware);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

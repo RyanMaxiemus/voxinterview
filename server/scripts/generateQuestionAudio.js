@@ -4,38 +4,45 @@ import fs from 'fs';
 import path from 'path';
 import { ROLE_PROFILES } from '../services/roleProfiles.js';
 
-// Load environment variables
+// Load environment variables from .env file
 dotenv.config();
 
-// Generate a consistent filename based on question content
+/**
+ * Generates a consistent filename based on question content and ID
+ * @param {string} questionText - The question text content
+ * @param {string} questionId - Unique question identifier
+ * @returns {string} Generated filename for audio file
+ */
 const generateAudioFilename = (questionText, questionId) => {
   const hash = crypto.createHash('md5').update(questionText).digest('hex');
   return `question-${questionId || hash}.mp3`;
 };
 
-// Generate TTS audio for a question
+/**
+ * Generates TTS audio for a single question using ElevenLabs API
+ * @param {string} questionText - Text to convert to speech
+ * @param {string} questionId - Unique identifier for the question
+ * @returns {Promise<string|null>} File path if successful, null if failed
+ */
 const generateQuestionAudio = async (questionText, questionId) => {
   const filename = generateAudioFilename(questionText, questionId);
   const filepath = path.join('uploads', filename);
 
-  // Skip if file already exists
+  // Skip if file already exists (caching)
   if (fs.existsSync(filepath)) {
-    console.log(`📁 Already exists: ${filename}`);
     return filepath;
   }
 
-  // Check if ElevenLabs is configured
+  // Check if ElevenLabs API is properly configured
   if (
     !process.env.ELEVENLABS_API_KEY ||
     process.env.ELEVENLABS_API_KEY === 'your_new_elevenlabs_api_key_here'
   ) {
-    console.log('⚠️ ElevenLabs API key not configured, skipping TTS');
     return null;
   }
 
   try {
-    console.log(`🎤 Generating audio for: ${questionText}`);
-
+    // Call ElevenLabs TTS API
     const ttsResponse = await fetch(
       'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
       {
@@ -65,31 +72,32 @@ const generateQuestionAudio = async (questionText, questionId) => {
       fs.mkdirSync('uploads', { recursive: true });
     }
 
+    // Save audio file to disk
     fs.writeFileSync(filepath, Buffer.from(audioBuffer));
-    console.log(`✅ Generated: ${filename}`);
 
     return filepath;
   } catch (err) {
-    console.error(`❌ Failed to generate audio for "${questionText}":`, err.message);
     return null;
   }
 };
 
-// Main function to generate all question audio files
+/**
+ * Main function to generate audio files for all questions across all roles
+ * Processes each role and question systematically with rate limiting
+ */
 const generateAllQuestionAudio = async () => {
-  console.log('🎵 Starting audio generation for all questions...\n');
-
   let totalGenerated = 0;
   let totalSkipped = 0;
   let totalFailed = 0;
 
-  for (const [roleName, profile] of Object.entries(ROLE_PROFILES)) {
-    console.log(`\n📋 Processing ${profile.title} questions:`);
-
+  // Process each role profile
+  for (const [, profile] of Object.entries(ROLE_PROFILES)) {
+    // Process each question in the role
     for (const question of profile.questions) {
       const questionText = question.text || question;
       const result = await generateQuestionAudio(questionText, question.id);
 
+      // Track results for summary
       if (result === null) {
         totalFailed++;
       } else if (fs.existsSync(result)) {
@@ -100,16 +108,24 @@ const generateAllQuestionAudio = async () => {
         }
       }
 
-      // Small delay to avoid rate limiting
+      // Rate limiting to avoid API throttling
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
 
-  console.log('\n🎯 Audio generation complete!');
-  console.log(`✅ Generated: ${totalGenerated} files`);
-  console.log(`📁 Skipped (already exists): ${totalSkipped} files`);
-  console.log(`❌ Failed: ${totalFailed} files`);
+  // Display summary of generation process
+  return {
+    generated: totalGenerated,
+    skipped: totalSkipped,
+    failed: totalFailed
+  };
 };
 
-// Run the script
-generateAllQuestionAudio().catch(console.error);
+// Execute the script when run directly
+generateAllQuestionAudio()
+  .then(results => {
+    process.exit(0);
+  })
+  .catch(err => {
+    process.exit(1);
+  });

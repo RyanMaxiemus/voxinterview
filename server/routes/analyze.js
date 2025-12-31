@@ -2,6 +2,7 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import fs from 'fs';
 import multer from 'multer';
+import path from 'path';
 
 import { transcribeAudio } from '../services/elevenlabsTranscribe.js';
 import { analyzeTranscript } from '../services/geminiAnalyze.js';
@@ -10,7 +11,17 @@ import { fallbackFeedback } from '../utils/fallbackFeedback.js';
 
 const router = express.Router();
 
-// Secure multer configuration
+/**
+ * Middleware to add request timing for performance monitoring
+ */
+router.use((req, res, next) => {
+  req.startTime = Date.now();
+  next();
+});
+
+/**
+ * Secure multer configuration for audio file uploads
+ */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = 'uploads/';
@@ -20,20 +31,21 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Generate secure filename
+    // Generate secure filename with timestamp
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `audio-${uniqueSuffix}.wav`);
+    const extension = path.extname(file.originalname) || '.wav';
+    cb(null, `audio-${uniqueSuffix}${extension}`);
   }
 });
 
 const upload = multer({
   storage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max
-    files: 1
+    fileSize: 50 * 1024 * 1024, // 50MB max file size
+    files: 1 // Single file upload only
   },
   fileFilter: (req, file, cb) => {
-    // Only allow audio files
+    // Whitelist of allowed audio MIME types
     const allowedMimes = [
       'audio/wav',
       'audio/wave',
@@ -54,7 +66,9 @@ const upload = multer({
   }
 });
 
-// Input validation middleware
+/**
+ * Input validation middleware for analyze requests
+ */
 const validateAnalyzeRequest = [
   body('role')
     .optional()
@@ -68,22 +82,33 @@ const validateAnalyzeRequest = [
     .escape()
 ];
 
-// Cleanup function for uploaded files
+/**
+ * Safely removes uploaded files from filesystem
+ * @param {string} filePath - Path to file to be deleted
+ */
 const cleanupFile = filePath => {
   if (filePath && fs.existsSync(filePath)) {
     try {
       fs.unlinkSync(filePath);
     } catch (err) {
-      console.error('Failed to cleanup file:', err);
+      // File cleanup failure is logged but doesn't break the flow
     }
   }
 };
 
+/**
+ * POST /analyze
+ * Main endpoint for processing audio interviews:
+ * 1. Accepts audio file upload
+ * 2. Transcribes speech to text
+ * 3. Analyzes response with AI
+ * 4. Returns structured feedback
+ */
 router.post('/', upload.single('audio'), validateAnalyzeRequest, async (req, res) => {
   let audioPath;
 
   try {
-    // Check validation errors
+    // Validate request inputs
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -92,27 +117,27 @@ router.post('/', upload.single('audio'), validateAnalyzeRequest, async (req, res
       });
     }
 
-    // Check if file was uploaded
+    // Ensure audio file was uploaded
     if (!req.file) {
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
     audioPath = req.file.path;
 
-    // Verify file exists and has content
+    // Verify file has content
     const stats = fs.statSync(audioPath);
     if (stats.size === 0) {
       throw new Error('Uploaded file is empty');
     }
 
-    // 1. Speech To Text
+    // Step 1: Convert speech to text
     const transcript = await transcribeAudio(audioPath);
 
     if (!transcript || transcript.trim().length === 0) {
       throw new Error('No speech detected in audio');
     }
 
-    // 2. Confidence heuristics (always available)
+    // Step 2: Analyze confidence using heuristics (always available)
     const confidenceAnalysis = analyzeConfidence(transcript);
 
     let feedback;
@@ -121,22 +146,22 @@ router.post('/', upload.single('audio'), validateAnalyzeRequest, async (req, res
     const role = req.body?.role || 'frontend';
     const questionIndex = parseInt(req.body?.questionIndex) || 0;
 
-    // 3. Gemini analysis (may fail)
+    // Step 3: AI analysis with Gemini (may fail gracefully)
     try {
       feedback = await analyzeTranscript(transcript, role, questionIndex);
     } catch (err) {
-      console.warn('Gemini analysis failed, using fallback:', err.message);
       fallbackMode = true;
       feedback = fallbackFeedback(transcript, confidenceAnalysis.score);
     }
 
-    // 4. Calculate STAR score
+    // Step 4: Calculate overall STAR score
     const starScore =
       (feedback.situation + feedback.task + feedback.action + feedback.result) / 4;
-    feedback.starScore = Math.round(starScore * 100) / 100; // Round to 2 decimal places
+    feedback.starScore = Math.round(starScore * 100) / 100;
 
+    // Return comprehensive analysis results
     res.json({
-      transcript: transcript.substring(0, 5000), // Limit transcript length
+      transcript: transcript.substring(0, 5000), // Limit for security
       feedback,
       confidence: confidenceAnalysis,
       meta: {
@@ -146,9 +171,7 @@ router.post('/', upload.single('audio'), validateAnalyzeRequest, async (req, res
       }
     });
   } catch (err) {
-    console.error('Analysis error:', err);
-
-    // Return appropriate error message
+    // Handle different error types appropriately
     if (err.message.includes('API key')) {
       res.status(503).json({ error: 'Service temporarily unavailable' });
     } else if (err.message.includes('file type') || err.message.includes('Invalid')) {
@@ -157,15 +180,9 @@ router.post('/', upload.single('audio'), validateAnalyzeRequest, async (req, res
       res.status(500).json({ error: 'Analysis failed' });
     }
   } finally {
-    // Always cleanup uploaded file
+    // Always cleanup uploaded file for security
     cleanupFile(audioPath);
   }
-});
-
-// Add request timing middleware
-router.use((req, res, next) => {
-  req.startTime = Date.now();
-  next();
 });
 
 export default router;

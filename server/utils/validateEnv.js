@@ -31,15 +31,12 @@ export function validateEnvironment() {
 
   // Validate API key formats
   if (
-    process.env.ELEVENLABS_API_KEY &&
-    !process.env.ELEVENLABS_API_KEY.startsWith('sk_')
+    process.env.GEMINI_API_KEY &&
+    (process.env.GEMINI_API_KEY.length < 39 || process.env.GEMINI_API_KEY.length > 40)
   ) {
-    console.warn('⚠️  Warning: ElevenLabs API key should start with "sk_"');
+    console.warn('⚠️  Warning: Gemini API key appears to have an invalid length.');
   }
 
-  if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith('AIza')) {
-    console.warn('⚠️  Warning: Gemini API key should start with "AIza"');
-  }
 
   console.log('✅ Environment validation passed');
 }

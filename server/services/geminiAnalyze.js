@@ -9,30 +9,39 @@ import { withTimeout } from '../utils/withTimeout.js';
 import { ROLE_PROFILES } from './roleProfiles.js';
 import { scoreConfidence } from './scoring/scoreConfidence.js';
 
-// Lazy initialization - create client when needed to avoid caching old env vars
+/**
+ * Creates a new Gemini AI model instance with current environment variables.
+ * Uses lazy initialization to avoid caching stale API keys.
+ * @returns {GenerativeModel} Configured Gemini model instance
+ */
 function getGeminiModel() {
-  console.log(
-    '🔍 Creating Gemini client with key:',
-    process.env.GEMINI_API_KEY?.substring(0, 15) + '...'
-  );
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   return genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 }
 
-const TIMEOUT_MS = 15000; // Increased from 8s to 15s
-const MAX_RETRIES = 1; // Reduced from 2 to 1 since Gemini is working
+// Configuration constants
+const TIMEOUT_MS = 15000; // Request timeout in milliseconds
+const MAX_RETRIES = 1; // Number of retry attempts on failure
 
 /**
- * Main interview analysis + progression handler
+ * Analyzes interview transcript using Gemini AI and provides structured feedback.
+ * Handles question progression and implements circuit breaker pattern for reliability.
+ *
+ * @param {string} transcript - The candidate's spoken response
+ * @param {string} role - Interview role (frontend, backend, security)
+ * @param {number} questionIndex - Current question index (0-based)
+ * @returns {Promise<Object>} Analysis results with feedback and next question info
  */
 export async function analyzeTranscript(
   transcript,
   role = 'frontend',
   questionIndex = 0
 ) {
+  // Get role profile and extract questions
   const profile = ROLE_PROFILES[role] || ROLE_PROFILES.frontend;
   const questions = profile.questions || [];
 
+  // Extract current and next question information
   const currentQuestionObj = questions[questionIndex];
   const currentQuestion =
     currentQuestionObj?.text || currentQuestionObj || 'Interview question';
@@ -40,8 +49,8 @@ export async function analyzeTranscript(
     questionIndex + 1 < questions.length ? questions[questionIndex + 1] : null;
   const nextQuestion = nextQuestionObj?.text || nextQuestionObj || null;
 
+  // Check if Gemini service is available via circuit breaker
   if (!isGeminiAvailable()) {
-    console.log('🔄 Using fallback - Gemini circuit breaker is open');
     return {
       ...fallbackFeedback(transcript, profile),
       nextQuestion,
@@ -50,12 +59,13 @@ export async function analyzeTranscript(
     };
   }
 
-  let lastError;
   let attemptCount = 0;
 
+  // Retry loop with exponential backoff
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
     attemptCount++;
     try {
+      // Construct detailed prompt for Gemini analysis
       const prompt = `
 You are an expert technical interviewer evaluating a ${profile.title} candidate.
 
@@ -88,22 +98,19 @@ CRITICAL REQUIREMENTS:
 - Focus on the actual question and response content, not placeholder text
 `;
 
-      // Get fresh model instance with current environment variables
+      // Generate AI response with timeout protection
       const model = getGeminiModel();
-
       const result = await withTimeout(
         model.generateContent(prompt),
         TIMEOUT_MS,
         'Gemini timeout'
       );
 
+      // Parse and validate response
       const responseText = result.response.text();
-      console.log('🔍 Raw Gemini response:', responseText);
-
       const parsed = JSON.parse(responseText);
-      console.log('🔍 Parsed Gemini response:', parsed);
 
-      // Validate and fix text fields if they're numbers
+      // Validate and fix text fields if they're numbers (fallback protection)
       if (typeof parsed.clarity === 'number') {
         parsed.clarity = `Response clarity rated ${parsed.clarity}/4`;
       }
@@ -118,40 +125,33 @@ CRITICAL REQUIREMENTS:
           'Focus on providing more specific examples and clearer structure.';
       }
 
-      // Safety clamp for STAR scores
+      // Ensure STAR scores are valid integers between 1-4
       ['situation', 'task', 'action', 'result'].forEach(k => {
         if (typeof parsed[k] !== 'number' || parsed[k] < 1 || parsed[k] > 4) {
           parsed[k] = 2;
         }
       });
 
+      // Add additional metadata
       parsed.confidenceScore = scoreConfidence(transcript);
       parsed.nextQuestion = nextQuestion;
       parsed.nextQuestionIndex = questionIndex + 1;
       parsed.completed = !nextQuestion;
 
+      // Record successful API call
       recordSuccess();
-
-      // Log success if we had previous failures
-      if (attemptCount > 1) {
-        console.log(`✅ Gemini succeeded on attempt ${attemptCount}`);
-      }
 
       return parsed;
     } catch (err) {
-      lastError = err;
-
-      // Only log warnings for actual failures, not intermediate retries
+      // Handle retry logic
       if (attempt <= MAX_RETRIES) {
-        console.log(`⚠️ Gemini attempt ${attempt} failed (${err.message}), retrying...`);
-        await new Promise(r => setTimeout(r, 400 * attempt));
-      } else {
-        console.error(`❌ Gemini failed after ${attemptCount} attempts: ${err.message}`);
+        // Wait before retrying with exponential backoff
+        await new Promise(r => setTimeout(r, 2000 * attempt));
       }
     }
   }
 
-  // Record failure for circuit breaker
+  // All attempts failed - record failure and return fallback
   recordFailure();
 
   return {

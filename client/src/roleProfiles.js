@@ -1,3 +1,8 @@
+/**
+ * Client-side role profiles mirroring server configuration.
+ * Used for UI display and question count calculations.
+ * Must stay synchronized with server/services/roleProfiles.js
+ */
 export const ROLE_PROFILES = {
   frontend: {
     title: 'Frontend Developer',

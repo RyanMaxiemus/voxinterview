@@ -1,3 +1,8 @@
+/**
+ * Role-based interview profiles containing questions and focus areas
+ * for different technical positions. Each role has 3 carefully crafted
+ * questions designed to assess STAR methodology responses.
+ */
 export const ROLE_PROFILES = {
   frontend: {
     title: 'Frontend Developer',
