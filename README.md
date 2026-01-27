@@ -1,74 +1,106 @@
-# VoxInterview Server
+# 🚀 VoxInterview
 
-Backend service for the VoxInterview application, providing AI-driven mock interviews with voice interaction. This server handles audio processing, Text-to-Speech (TTS) generation, and AI-based answer analysis.
+> Your voice-first AI interview coach. Get real-time, data-driven feedback on your spoken answers to role-specific questions, powered by Gemini AI and ElevenLabs TTS.
 
-## Features
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+[![Tech: React](https://img.shields.io/badge/Tech-React-61DAFB?logo=react)](https://reactjs.org/)
+[![Tech: Node.js](https://img.shields.io/badge/Tech-Node.js-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![AI: Gemini](https://img.shields.io/badge/AI-Gemini-4285F4?logo=google&logoColor=white)](https://ai.google.dev/gemini-api)
 
-- **Voice Interaction**: Uses ElevenLabs API for high-quality Text-to-Speech question generation.
-- **Audio Processing**: Handles audio uploads via Multer with secure file validation and whitelist checking.
-- **AI Analysis**: Transcribes user audio and analyzes responses using Gemini AI.
-- **Role-based Interviews**: Supports specific interview tracks (Frontend, Backend, Security).
-- **Caching**: Caches generated audio files to reduce API costs and latency.
+---
 
-## Prerequisites 
+## 🧐 What is this?
 
-- Node.js (v16+ recommended)
-- npm or yarn
-- ElevenLabs API Key
-- Google Gemini API Key
+VoxInterview is a full-stack application designed to provide a realistic and effective mock interview experience. It addresses the common challenge of practicing spoken answers by integrating cutting-edge AI and voice technology. The system uses **ElevenLabs** for high-quality Text-to-Speech to ask questions and **Google's Gemini AI** to transcribe your audio response, analyze its content, and deliver immediate, actionable feedback. This is more than just a Q&A tool; it's a dedicated coach built to help developers and professionals refine their communication skills and boost confidence for their next technical interview.
 
-## Installation
+## 🛠️ Tech Stack
 
-1. Clone the repository.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Ensure the `uploads/` directory exists or let the application create it on startup.
+This project is structured as a monorepo with a separate client (frontend) and server (backend).
 
-## Configuration
+| Component         | Technology         | Key Libraries/Frameworks                                                          |
+| :---------------- | :----------------- | :-------------------------------------------------------------------------------- |
+| **Frontend**      | JavaScript (React) | React (v19), Vite, `react-dom`                                                    |
+| **Backend**       | Node.js (Express)  | Express, `@google/generative-ai`, `axios`, `multer` (for audio uploads), `helmet` |
+| **Core Services** | AI & Voice APIs    | Google Gemini API, ElevenLabs API                                                 |
+| **Development**   | Package Manager    | npm                                                                               |
 
-Create a `.env` file in the root directory with the following variables:
+## 🚀 Quick Start
 
-```env
-PORT=3000
-NODE_ENV=development
-ELEVENLABS_API_KEY=your_elevenlabs_key
-# Required for the Gemini analysis service
-GEMINI_API_KEY=your_gemini_key
-```
+The following instructions are optimized for a Linux environment (Ubuntu/Debian).
 
-## API Endpoints
+### Prerequisites
 
-### 1. Ask a Question
-Retrieves a specific question and its generated audio.
+You must have **Node.js (v16+)** and **npm** installed.
 
-- **URL**: `/interview/ask`
-- **Method**: `POST`
-- **Body**:
-  ```json
-  {
-    "role": "frontend",
-    "questionIndex": 0
-  }
-  ```
+1.  **Clone the repository**
 
-### 2. Submit Answer
-Uploads an audio response for transcription and analysis.
+    ```bash
+    git clone https://github.com/RyanMaxiemus/VoxInterview.git
+    cd VoxInterview
+    ```
 
-- **URL**: `/interview/answer`
-- **Method**: `POST`
-- **Content-Type**: `multipart/form-data`
-- **Fields**:
-  - `audio`: The recorded audio file (wav, mp3, m4a, etc.)
-  - `role`: The interview role (e.g., "frontend")
+2.  **Configure Environment Variables**
 
-### 3. Get Random Question
-Fetches a random question text for a specific role (text only, no audio generation).
+    Create a file named `.env` in the root of the `VoxInterview` directory and populate it with your API keys.
 
-- **URL**: `/interview/question`
-- **Method**: `GET`
-- **Query Params**: `?role=frontend`
+    ```dotenv
+    # Server Configuration
+    PORT=3000
+    NODE_ENV=development
 
-## License
-MIT
+    # API Keys
+    ELEVENLABS_API_KEY="YOUR_ELEVENLABS_API_KEY"
+    GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+    ```
+
+3.  **Install Dependencies**
+
+    Install dependencies for both the server and the client.
+
+    ```bash
+    # Install server dependencies
+    cd server
+    npm install
+
+    # Install client dependencies
+    cd ../client
+    npm install
+    ```
+
+4.  **Run the Application**
+
+    You will need two separate terminal sessions: one for the server and one for the client.
+
+    **Terminal 1: Start the Server**
+
+    ```bash
+    cd server
+    npm start
+    # Server will run on http://localhost:3000
+    ```
+
+    **Terminal 2: Start the Client**
+
+    ```bash
+    cd client
+    npm run dev
+    # Client will typically run on http://localhost:5173
+    ```
+
+    Open your browser to the client URL (e.g., `http://localhost:5173`) to begin your mock interview.
+
+## 📸 Preview
+
+![VoxInterview Screenshot](/client/src/assets/VoxInterview-Screenshot.png)
+
+## 🤝 Contributing
+
+Found a bug? Have an idea for a new feature or a better way to analyze an answer? We welcome all contributions!
+
+1.  **Open an Issue:** Before submitting a Pull Request, please open an issue to discuss the bug or feature you're working on. This helps prevent duplicate work and ensures alignment with the project's goals.
+2.  **Fork and Branch:** Fork the repository and create a new branch for your contribution.
+3.  **Code and Commit:** Write clean, well-documented code. Commit messages should be descriptive and follow a conventional format (e.g., `feat: add new role-specific questions`).
+4.  **Submit a PR:** Submit a Pull Request against the `main` branch. We'll review it as quickly as possible.
+
+Let's make VoxInterview the best interview coach available, together.
